@@ -1,0 +1,40 @@
+name: Songs von fcstpauli.com laden
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/fc-st-pauli-song-app-54z6te]
+    paths: [.github/workflows/fetch-songs.yml, scripts/**]
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Seiten herunterladen
+        run: |
+          mkdir -p data/raw
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          BASE=https://www.fcstpauli.com/spsc/der-st-pauli-song-contest-deine-stimme-wird-gebraucht
+          curl -sSL -A "$UA" -o data/raw/song-auswahl.html "$BASE/song-auswahl"
+          curl -sSL -A "$UA" -o data/raw/song-auswahl-2.html "$BASE/song-auswahl-2"
+          ls -la data/raw
+      - name: Songs parsen
+        run: |
+          if [ -f scripts/parse.mjs ]; then
+            npm install --no-save cheerio@1.0.0
+            node scripts/parse.mjs
+          fi
+      - name: Änderungen committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Song-Daten von fcstpauli.com aktualisieren"
+          git push
