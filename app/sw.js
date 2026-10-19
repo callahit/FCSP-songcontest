@@ -1,6 +1,6 @@
 // Service Worker: macht App und Song-Liste offline verfügbar
 // und liefert offline gespeicherte MP3s aus.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `spsc-shell-${VERSION}`;
 const DATA = 'spsc-data';
 const AUDIO = 'spsc-audio';
@@ -11,7 +11,7 @@ const SHELL_FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webman
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const shell = await caches.open(SHELL);
-    await shell.addAll(SHELL_FILES);
+    await shell.addAll(SHELL_FILES.map(f => new Request(f, { cache: 'reload' })));
     const res = await fetch('songs.json', { cache: 'no-cache' });
     if (res.ok) await (await caches.open(DATA)).put('songs.json', res);
     self.skipWaiting();

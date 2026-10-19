@@ -115,7 +115,8 @@ function songRow(s) {
   const badges = h('span', { class: 'badges' },
     s.audio.length ? h('span', { class: 'badge' }, 'MP3') : null,
     !s.audio.length && s.youtube.length ? h('span', { class: 'badge yt' }, 'YouTube') : null,
-    !s.audio.length && !s.youtube.length ? h('span', { class: 'badge' }, 'nur Text') : null,
+    !s.audio.length && !s.youtube.length && s.links.length ? h('span', { class: 'badge' }, 'Link') : null,
+    !s.audio.length && !s.youtube.length && !s.links.length ? h('span', { class: 'badge' }, 'nur Text') : null,
     isOfflineAvailable(s) ? h('span', { class: 'badge off' }, 'offline') : null,
     heard.has(s.id) ? h('span', { class: 'badge heard' }, '✓ gehört') : null,
   );
@@ -180,18 +181,29 @@ function renderDetail(id) {
   } else if (s.youtube.length) {
     // Kein MP3 hinterlegt -> YouTube-Video einbetten
     for (const yt of s.youtube) {
-      if (navigator.onLine) {
+      const blocked = (s.youtubeBlocked ?? []).includes(yt);
+      const unavailable = (s.youtubeUnavailable ?? []).includes(yt);
+      if (navigator.onLine && !blocked) {
         media.push(h('div', { class: 'video' }, h('iframe', {
           src: `https://www.youtube-nocookie.com/embed/${yt}?rel=0`, title: `${s.title} – ${s.artist}`, loading: 'lazy',
           allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture', allowfullscreen: true,
           referrerpolicy: 'strict-origin-when-cross-origin',
         })));
       } else {
-        const box = h('div', { class: 'video-offline' }, h('span', {}, 'YouTube-Video – zum Abspielen wird Internet benötigt'));
-        box.style.backgroundImage = `url(https://i.ytimg.com/vi/${yt}/hqdefault.jpg)`;
+        // Offline oder Einbetten vom Rechteinhaber gesperrt: Vorschaubild mit Link zu YouTube
+        const msg = unavailable ? 'Dieses Video ist auf YouTube nicht (mehr) verfügbar'
+          : !navigator.onLine ? 'YouTube-Video – zum Abspielen wird Internet benötigt'
+          : 'Einbetten nicht erlaubt – tippen, um auf YouTube abzuspielen';
+        const box = h(unavailable ? 'div' : 'a', {
+          class: 'video-offline', href: unavailable ? null : `https://www.youtube.com/watch?v=${yt}`, target: '_blank', rel: 'noopener',
+        }, h('span', {}, msg));
+        if (!unavailable) box.style.backgroundImage = `url(https://i.ytimg.com/vi/${yt}/hqdefault.jpg)`;
         media.push(box);
       }
     }
+  } else if (s.links.length) {
+    media.push(h('p', { class: 'muted' }, 'Kein MP3 und kein YouTube-Video hinterlegt – der Song ist hier verlinkt:'),
+      h('p', {}, h('a', { class: 'btn primary', href: s.links[0].url, target: '_blank', rel: 'noopener' }, '▶ ' + s.links[0].label)));
   } else {
     media.push(h('p', { class: 'muted' }, 'Für diesen Song ist kein MP3 und kein Video hinterlegt – nur der Text.'));
   }
@@ -406,7 +418,15 @@ function wireUi() {
 // ---------- Start ----------
 (async function init() {
   wireUi();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    // Bei einer neuen App-Version einmal neu laden, damit sie sofort aktiv ist
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController && !reloading) { reloading = true; location.reload(); }
+    });
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
   try {
     await Promise.all([loadData(), refreshCachedAudio().catch(() => {})]);
     render();

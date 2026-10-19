@@ -72,13 +72,14 @@ function youtubeId(url) {
 }
 
 // Listen-Seiten: <li><a href="...">S0001, Titel - Interpret</a></li>
+// Jedes <li> einzeln auswerten – teils steht Text auch außerhalb des Links ("…Sparre</a>r")
 function parseList(html) {
   const items = [];
-  const re = /<li[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/li>/g;
-  for (const [, href, label] of html.matchAll(re)) {
-    const m = text(label).match(/^([SNK])(\d{3,})\s*,\s*([\s\S]+)$/);
+  for (const [, li] of html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/g)) {
+    const m = text(li).match(/^([SNK])(\d{3,})\s*,\s*([\s\S]+)$/);
     if (!m) continue;
-    items.push({ id: m[1] + m[2], prefix: m[1], label: m[3].trim(), href: decode(href) });
+    const href = li.match(/<a\b[^>]*href="([^"]+)"/);
+    items.push({ id: m[1] + m[2], prefix: m[1], label: m[3].replace(/\s+/g, ' ').trim(), href: href ? decode(href[1]) : null });
   }
   return items;
 }
@@ -163,16 +164,43 @@ function parseDetail(html) {
 }
 
 // "Titel - Interpret" aufteilen; bekannter Interpret (aus der Detailseite) hat Vorrang
+const SEPARATORS = [' - ', ' – ', ' — '];
 function splitLabel(label, artist) {
   if (artist) {
-    for (const sep of [' - ', ' – ', ' — ', '_', ' _ ', ' -', '- ', ' ']) {
+    for (const sep of [...SEPARATORS, '_', ' _ ', ' -', '- ', ' ']) {
       const suffix = sep + artist;
       if (label.toLowerCase().endsWith(suffix.toLowerCase())) return { title: label.slice(0, -suffix.length).trim(), artist };
     }
-    return { title: label, artist };
   }
-  const m = label.match(/^([\s\S]+)\s[-–—]\s([\s\S]+)$/);
-  return m ? { title: m[1].trim(), artist: m[2].trim() } : { title: label, artist: '' };
+  // Am letzten Trenner teilen (z. B. "St. Pauli ’Til I Die - Swearing At Motorists")
+  for (const sep of SEPARATORS) {
+    const i = label.lastIndexOf(sep);
+    if (i <= 0) continue;
+    const title = label.slice(0, i).trim(), listArtist = label.slice(i + sep.length).trim();
+    if (!artist) return { title, artist: listArtist };
+    const a = norm(artist), b = norm(listArtist);
+    if (a.includes(b) || b.includes(a)) return { title, artist };
+  }
+  return { title: label, artist: artist || '' };
+}
+
+function siteName(url) {
+  const host = new URL(url).hostname.replace(/^www\./, '');
+  const known = { 'bandcamp.com': 'Bandcamp', 'spotify.com': 'Spotify', 'soundcloud.com': 'SoundCloud', 'apple.com': 'Apple Music', 'deezer.com': 'Deezer' };
+  const hit = Object.keys(known).find(k => host === k || host.endsWith('.' + k));
+  return hit ? `Auf ${known[hit]} anhören` : host;
+}
+
+// Prüft per oEmbed, ob YouTube das Einbetten erlaubt (401 = Einbetten gesperrt, 400/404 = nicht verfügbar)
+async function youtubeStatus(id) {
+  if (localDir) return 'ok';
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`, { headers: { 'User-Agent': UA } });
+    if (res.ok) return 'ok';
+    if (res.status === 401 || res.status === 403) return 'no-embed';
+    if (res.status === 400 || res.status === 404) return 'unavailable';
+  } catch {}
+  return 'ok';
 }
 
 async function pool(items, size, fn) {
@@ -201,7 +229,7 @@ async function main() {
 
   let failed = 0;
   const songs = await pool(items, 4, async (it, i) => {
-    const isDetail = /fcstpauli\.com\/spsc\//.test(it.href);
+    const isDetail = /fcstpauli\.com\/spsc\//.test(it.href ?? '');
     let detail = null;
     if (isDetail) {
       const slug = it.href.replace(/[?#].*$/, '').split('/').filter(Boolean).pop();
@@ -213,7 +241,10 @@ async function main() {
     if (isDetail && !detail && prev) return prev; // Fehler beim Laden: alte Daten behalten
 
     const { title, artist } = splitLabel(it.label, detail?.artist);
-    const yt = [...new Set([youtubeId(it.href), ...(detail?.youtube ?? [])].filter(Boolean))];
+    const yt = [...new Set([it.href && youtubeId(it.href), ...(detail?.youtube ?? [])].filter(Boolean))];
+    // Link der Liste auf andere Seiten (z. B. Bandcamp) als Anhör-Link übernehmen
+    const links = [...(detail?.links ?? [])];
+    if (it.href && !isDetail && !youtubeId(it.href)) links.unshift({ url: it.href, label: siteName(it.href) });
     if ((i + 1) % 25 === 0) console.log(`  ${i + 1}/${items.length}`);
     return {
       id: it.id,
@@ -225,10 +256,20 @@ async function main() {
       audio: detail?.audio ?? [],
       youtube: yt,
       documents: detail?.documents ?? [],
-      links: detail?.links ?? [],
+      links,
       url: isDetail ? it.href : it.page,
     };
   });
+
+  // Einbettbarkeit der YouTube-Videos prüfen
+  const ytIds = [...new Set(songs.flatMap(s => s.youtube))];
+  const ytStatus = new Map(await pool(ytIds, 4, async id => [id, await youtubeStatus(id)]));
+  for (const s of songs) {
+    s.youtubeBlocked = s.youtube.filter(id => ytStatus.get(id) !== 'ok');
+    s.youtubeUnavailable = s.youtube.filter(id => ytStatus.get(id) === 'unavailable');
+  }
+  console.log(`YouTube: ${ytIds.length} Videos, ${[...ytStatus.values()].filter(v => v === 'no-embed').length} nicht einbettbar, ` +
+    `${[...ytStatus.values()].filter(v => v === 'unavailable').length} nicht verfügbar`);
 
   const data = {
     updated: new Date().toISOString(),
