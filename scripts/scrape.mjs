@@ -53,6 +53,8 @@ function decode(s) {
 }
 const text = html => decode(html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim();
 
+const norm = s => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
 function youtubeId(url) {
   const m = decode(url).match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
   return m ? m[1] : null;
@@ -100,7 +102,7 @@ function parseDetail(html) {
   end = html.lastIndexOf('<h2', end);
   const main = html.slice(start, end > start ? end : undefined);
 
-  const detail = { heading: h1 ? text(h1[1]) : null, artist: null, description: [], sections: [], audio: [], youtube: [], links: [] };
+  const detail = { heading: h1 ? text(h1[1]) : null, artist: null, description: [], sections: [], audio: [], youtube: [], documents: [], links: [] };
 
   // Abschnitte: <h2>Überschrift</h2><div>Inhalt</div>
   const h2re = /<h2[^>]*>([\s\S]*?)<\/h2>/g;
@@ -113,6 +115,23 @@ function parseDetail(html) {
     const paras = paragraphs(block);
     if (first) { detail.artist = heading; detail.description = paras; first = false; }
     else detail.sections.push({ heading, paragraphs: paras });
+  }
+  // Einreichungen nur als Text (z. B. Songtext ohne Audio) haben keine <h2>-Abschnitte
+  if (first) {
+    const h1Text = detail.heading ? norm(detail.heading) : '';
+    detail.description = paragraphs(main.slice(h1 ? h1[0].length : 0))
+      .filter(p => !/^[SNK]\d{3,}$/.test(p) && !h1Text.includes(norm(p)) && p !== 'Sharing Icon');
+  }
+  // Beschriftungen von Datei-Downloads ("pdf 1.0Mb", "K0011 Songtext") gehören nicht zur Beschreibung
+  const noise = p => /^(pdf|docx?|txt)\s+[\d.,]+\s*[km]?b$/i.test(p) || /^[SNK]\d{3,}\s+Songtext$/i.test(p);
+  detail.description = detail.description.filter(p => !noise(p));
+  for (const sec of detail.sections) sec.paragraphs = sec.paragraphs.filter(p => !noise(p));
+
+  // Angehängte Dokumente (z. B. Songtext als PDF)
+  for (const [, href] of main.matchAll(/<a\b[^>]*href="(https?:[^"]+\/uploads\/documents\/[^"]+)"/g)) {
+    const url = decode(href);
+    const ext = (url.match(/\.(\w+)(?:\?|$)/) || [, 'Datei'])[1].toUpperCase();
+    if (!detail.documents.some(d => d.url === url)) detail.documents.push({ url, label: `Songtext / Dokument (${ext})` });
   }
 
   for (const [, src] of main.matchAll(/<(?:audio|source)\b[^>]*\bsrc="([^"]+)"/g)) {
@@ -193,6 +212,7 @@ async function main() {
       sections: detail?.sections ?? [],
       audio: detail?.audio ?? [],
       youtube: yt,
+      documents: detail?.documents ?? [],
       links: detail?.links ?? [],
       url: isDetail ? it.href : it.page,
     };

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SPSC Songs</title>
+  <meta name="description" content="Alle Songs des St. Pauli Song Contests offline ansehen, anhören und Favoriten markieren.">
+  <meta name="theme-color" content="#4a2c1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SPSC Songs">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <h1><a href="#/">SPSC <span>Songs</span></a></h1>
+      <span id="net" class="net" hidden>offline</span>
+      <button id="menu-btn" class="icon-btn" aria-label="Menü" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Titel, Interpret, Nummer, Beschreibung …" autocomplete="off" aria-label="Songs durchsuchen">
+    </div>
+    <nav id="tabs" class="tabs" aria-label="Kategorien"></nav>
+    <div class="filters">
+      <button id="f-fav" class="chip" aria-pressed="false">★ Nur Favoriten</button>
+      <button id="f-unheard" class="chip" aria-pressed="false">Noch nicht gehört</button>
+      <button id="f-offline" class="chip" aria-pressed="false">Offline verfügbar</button>
+    </div>
+  </header>
+
+  <div id="menu" class="menu" hidden>
+    <button data-action="share">Favoriten teilen / kopieren</button>
+    <button data-action="cache-favs">MP3s der Favoriten offline speichern</button>
+    <button data-action="cache-all">Alle MP3s offline speichern …</button>
+    <button data-action="clear-audio">Offline-MP3s löschen</button>
+    <button data-action="update">Song-Liste aktualisieren</button>
+    <button data-action="about">Über diese App</button>
+  </div>
+
+  <main id="view"></main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <template id="about-tpl">
+    <section class="detail about">
+      <a class="back" href="#/">← Zurück</a>
+      <h2>Über diese App</h2>
+      <p>Inoffizielle Fan-App mit allen Songs der Song-Auswahl des <strong>St. Pauli Song Contests</strong>.
+        Alle Daten stammen von der Webseite des FC St. Pauli:</p>
+      <ul id="about-sources"></ul>
+      <p>Die Song-Liste und alle Beschreibungen sind in der App gespeichert und funktionieren offline.
+        MP3s kannst du einzeln (Button im Song) oder gesammelt über das Menü offline speichern.
+        YouTube-Videos brauchen immer eine Internetverbindung.</p>
+      <p class="muted">Hinweis: Offline gespeicherte MP3s funktionieren zuverlässig in Chrome (Android/Desktop).
+        Auf dem iPhone (Safari) kann das Abspielen ohne Internet je nach iOS-Version scheitern – die Songliste,
+        Beschreibungen und Favoriten sind aber überall offline verfügbar.</p>
+      <p>Favoriten und „gehört“-Markierungen bleiben nur auf diesem Gerät gespeichert.</p>
+      <p class="muted">Stand der Daten: <span id="about-updated"></span></p>
+      <p><strong>Abstimmen</strong> kannst du nur über die offizielle Seite des Vereins.</p>
+    </section>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
