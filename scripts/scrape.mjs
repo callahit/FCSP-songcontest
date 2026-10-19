@@ -23,6 +23,17 @@ const CATEGORIES = {
 
 const args = process.argv.slice(2);
 const localDir = args[0] === '--local' ? args[1] : null;
+// --save-raw DIR: bereinigten Seiteninhalt zur Kontrolle ablegen
+const rawDir = args.includes('--save-raw') ? args[args.indexOf('--save-raw') + 1] : null;
+
+async function saveRaw(name, html) {
+  if (!rawDir) return;
+  let a = html.indexOf('<h1'), b = html.indexOf('Themen aus der Gemeinschaft');
+  const main = html.slice(a < 0 ? 0 : a, b < 0 ? undefined : b)
+    .replace(/<svg[\s\S]*?<\/svg>/g, '').replace(/ (class|style|data-[\w-]+)="[^"]*"/g, '');
+  await mkdir(rawDir, { recursive: true });
+  await writeFile(path.join(rawDir, name + '.html'), main);
+}
 
 async function load(slug) {
   if (localDir) {
@@ -181,6 +192,7 @@ async function main() {
   for (const slug of PAGES) {
     const html = await load(slug);
     if (!html) throw new Error(`Seite ${slug} konnte nicht geladen werden`);
+    await saveRaw(slug, html);
     const list = parseList(html);
     console.log(`${slug}: ${list.length} Songs`);
     items.push(...list.map(it => ({ ...it, page: `${BASE}/${slug}` })));
@@ -194,7 +206,7 @@ async function main() {
     if (isDetail) {
       const slug = it.href.replace(/[?#].*$/, '').split('/').filter(Boolean).pop();
       const html = await load(slug);
-      if (html) detail = parseDetail(html);
+      if (html) { detail = parseDetail(html); await saveRaw(slug, html); }
       else failed++;
     }
     const prev = prevById.get(it.id);
