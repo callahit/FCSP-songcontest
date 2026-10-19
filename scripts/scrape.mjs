@@ -199,8 +199,11 @@ async function youtubeStatus(id) {
     if (res.ok) return 'ok';
     if (res.status === 401 || res.status === 403) return 'no-embed';
     if (res.status === 400 || res.status === 404) return 'unavailable';
-  } catch {}
-  return 'ok';
+    console.warn(`! YouTube ${id}: HTTP ${res.status}`);
+  } catch (err) {
+    console.warn(`! YouTube ${id}: ${err.message}`);
+  }
+  return 'ok'; // unklar -> trotzdem einbetten, der Player zeigt dann selbst einen Hinweis
 }
 
 async function pool(items, size, fn) {

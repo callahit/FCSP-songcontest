@@ -29,3 +29,12 @@ jobs:
           path: app
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Veröffentlichte App prüfen
+        env:
+          URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          sleep 20
+          curl -sSf "$URL" | grep -q '<script src="app.js">' && echo "App-Seite OK: $URL"
+          curl -sSf "${URL}songs.json" -o live.json
+          node -e 'const d=require("./live.json"), l=require("./app/songs.json"); console.log("Songs live:", d.songs.length, "erwartet:", l.songs.length); if (d.songs.length !== l.songs.length) process.exit(1)'
+          for f in sw.js manifest.webmanifest style.css icon-192.png; do curl -sSf -o /dev/null "$URL$f" && echo "$f OK"; done
