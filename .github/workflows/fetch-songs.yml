@@ -26,6 +26,10 @@ jobs:
           node-version: 20
       - name: Songs laden
         run: node scripts/scrape.mjs
+      - name: Debug-Seiten
+        run: |
+          mkdir -p data/sample
+          for id in n0096 n0099 n0196 k0011; do curl -sSL -o data/sample/$id.html "https://www.fcstpauli.com/spsc/der-st-pauli-song-contest-deine-stimme-wird-gebraucht/$id"; done
       - name: CORS der MP3-Dateien prüfen
         run: |
           url=$(node -e 'const d=require("./app/songs.json");console.log(d.songs.find(s=>s.audio.length).audio[0])')
@@ -36,7 +40,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/songs.json
+          git add app/songs.json data
           if git diff --cached --quiet; then echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           git commit -m "Song-Daten von fcstpauli.com aktualisieren"
           git push
